@@ -18,93 +18,166 @@ You will need to install PLINK and run the analyses. Please follow the OS-specif
 Before fitting any models, it is essential to understand the data. Use R or bash code to answer the following questions about the `gwa.qc.A1.fam`, `gwa.qc.A1.bim`, and `gwa.qc.A1.bed` files, available at the following Google Drive link: <https://drive.google.com/drive/folders/11meVqGCY5yAyI1fh-fAlMEXQt0VmRGuz?usp=drive_link>. Please download all three files from this link and place them in `02_activities/data/`.
 
 (i) Read the .fam file. How many samples does the dataset contain?
+```{r, message=FALSE, warning=FALSE, results='hide'}
+library(data.table)
+library(ggplot2)
+library(seqminer)
+library(HardyWeinberg)
+library(dplyr)
+```
 
-```         
-# Your answer here...
+```{r setup, include=FALSE}
+# Set up a consistent path for all chunks of code
+knitr::opts_knit$set(root.dir = normalizePath("../../"))
+```
+
+```{r}        
+fam <- read.table("02_activities/data/gwa.qc.A1.fam", header = FALSE)
+nrow(fam)
+
 ```
 
 (ii) What is the 'variable type' of the response variable (i.e.Continuous or binary)?
 
 ```         
-# Your answer here...
+Continuous
 ```
 
 (iii) Read the .bim file. How many SNPs does the dataset contain?
+setopt interactivecomments
+printf "%s\n" rs1861, rs3813199, rs3128342, rs11804831 > ./02_activities/data/gwa.qc.A1.bim
 
-```         
-# Your answer here...
+```{r}        
+
+bim <- read.table("02_activities/data/gwa.qc.A1.bim", header = FALSE)
+nrow(bim)
+
 ```
 
 #### Question 2: Allele Frequency Estimation
 
 (i) Load the genotype matrix for SNPs rs1861, rs3813199, rs3128342, and rs11804831 using additive coding. What are the allele frequencies (AFs) for these four SNPs?
 
-```         
-# Your code here...
+```{bash}     
+
+plink2 \
+  --bfile 02_activities/data/gwa.qc.A1 \
+  --snps rs1861,rs3813199,rs3128342,rs11804831 \
+  --freq counts \
+  --out 02_activities/data/af_four_snps
+
 ```
 
 (ii) What are the minor allele frequencies (MAFs) for these four SNPs?
 
-```         
-# Your code here...
+```{bash}      
+
+
+plink2 \
+  --bfile 02_activities/data/gwa.qc.A1 \
+  --snps rs1861,rs3813199,rs3128342,rs11804831 \
+  --freq \
+  --out 02_activities/data/maf_four_snps
+
 ```
 
 #### Question 3: Hardy–Weinberg Equilibrium (HWE) Test
 
 (i) Conduct the Hardy–Weinberg Equilibrium (HWE) test for all SNPs in the .bim file. Then, load the file containing the HWE p-value results and display the first few rows of the resulting data frame.
 
-```         
-# Your code here...
+```{bash}      
+
+plink2 --bfile C://Users//jasmine.kaur//shell//gen_data//02_activities//data//gwa.qc.A1 \
+  --hardy \
+  --out C://Users//jasmine.kaur//shell//gen_data//02_activities//data//hwe_all
+
+ 
+
 ```
 
 (ii) What are the HWE p-values for SNPs rs1861, rs3813199, rs3128342, and rs11804831?
 
-```         
-# Your code here...
+```{r} 
+hwe <- fread("./02_activities/data/hwe_all.hardy")
+head(hwe)      
+subset(hwe, ID %in% c("rs1861","rs3813199","rs3128342","rs11804831"))[, c("ID","P")]
 ```
 
 #### Question 4: Genetic Association Test
 
 (i) Conduct a linear regression to test the association between SNP rs1861 and the phenotype. What is the p-value?
+```{bash}
+plink2 \
+  --bfile ./02_activities/data/gwa.qc.A1 \
+  --snp rs1861 \
+  --export A \
+  --out ./02_activities/data/geno_rs1861
+```
 
-```         
-# Your code here...
+```{r}         
+
+dat <- read.table("02_activities/data/geno_rs1861.raw", header = TRUE)
+gcol <- grep("^rs1861", names(dat), value = TRUE)[1]
+fit_add <- lm(PHENOTYPE ~ dat[[gcol]], data = dat)
+summary(fit_add)$coefficients[2,4]
+
 ```
 
 (ii) How would you interpret the beta coefficient from this regression?
 
 ```         
-# Your answer here...
+The beta is the expected change in the phenotype per one additional copy of the coded allele at rs1861 (i.e., the slope of the additive genetic effect), holding other factors constant.
 ```
 
 (iii) Plot the scatterplot of phenotype versus the genotype of SNP rs1861. Add the regression line to the plot.
 
-```         
-# Your code here...
+```{r}     
+
+geno_add <- dat[[gcol]]
+plot(geno_add, dat$PHENOTYPE,
+     xlab = "rs1861 genotype (additive: 0/1/2)",
+     ylab = "PHENOTYPE", pch = 19, col = "#1f77b4")
+abline(lm(dat$PHENOTYPE ~ geno_add), col = "red", lwd = 2)
+
 ```
 
 (iv) Convert the genotype coding for rs1861 to recessive coding.
 
-```         
-# Your code here...
+```{r}      
+geno_rec <- ifelse(is.na(geno_add), NA, ifelse(geno_add == 2, 1, 0))
 ```
 
 (v) Conduct a linear regression to test the association between the recessive-coded rs1861 and the phenotype. What is the p-value?
 
-```         
-# Your code here...
+```{r}      
+
+
+fit_rec <- lm(dat$PHENOTYPE ~ geno_rec)
+summary(fit_rec)$coefficients[2,4]
+
 ```
 
 (vi) Plot the scatterplot of phenotype versus the recessive-coded genotype of rs1861. Add the regression line to the plot.
 
-```         
-# Your code here...
+```{r}     
+
+
+plot(geno_rec, dat$PHENOTYPE,
+     xlab = "rs1861 recessive genotype (0/1)",
+     ylab = "Phenotype", pch = 19, col = "#2ca02c", xaxt = "n")
+axis(side = 1, at = c(0,1), labels = c("Non-homozygote","Homozygote coded"))
+abline(lm(dat$PHENOTYPE ~ geno_rec), col = "red", lwd = 2)
+
+
 ```
 
 (vii) Which model fits better? Justify your answer.
 
-```         
-# Your answer here...
+```{r}      
+
+c(AIC_additive = AIC(fit_add), AIC_recessive = AIC(fit_rec))
+# The model with the lower AIC (or higher adjusted R^2) fits better.
+
 ```
 
 ### Criteria
